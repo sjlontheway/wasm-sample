@@ -1,125 +1,160 @@
-import G6, { ModelConfig, IGroup, Item, UpdateType } from '@antv/g6';
+import G6, { ModelConfig, IGroup, Item, UpdateType, Shape } from '@antv/g6';
 import { getEllipsisText, measureTextWidth } from '@antv/util';
+import { ShapeAttrs } from '@antv/g-base';
 import { LineInfo } from '../types';
 
+const type = 'Basic-Block-node';
+
+const NodeStyle = {
+    boxStyle: {
+        stroke: '#096DD9',
+        radius: 4,
+        fill: '#fafafa',
+    },
+    headStyle: {
+        fill: '#096DD9',
+        height: 22,
+        radius: [4, 4, 0, 0],
+        labelStyle: {
+            fontSize: 12,
+            fill: '#fff',
+        },
+    },
+
+    instGroupStyle: {
+        paddingV: 8,
+        paddingH: 6,
+        lineHeight: 10,
+        fontSize: 10,
+        breakPointStyle: {
+            r: 3,
+            fill: 'red',
+            padding: 6,
+            lineHeiht: 12,
+        },
+        labelPcStyle: {
+            fontSize: 10,
+            padding: 3,
+            lineHeiht: 12,
+            textAlign: 'start',
+            textBaseline: 'top',
+            fill: '#616161',
+        },
+        labelOpStrStyle: {
+            fontSize: 10,
+            padding: 3,
+            lineHeiht: 12,
+            textAlign: 'start',
+            textBaseline: 'top',
+            fill: '#919191',
+        },
+    },
+};
+
 G6.registerNode(
-    'Basic-Block-node',
+    type,
     {
         draw(cfg: ModelConfig, group: IGroup) {
             const { instLines, style } = cfg;
             const width: number = cfg.width as number;
             const height = cfg.height as number;
-            const boxStyle = {
-                stroke: '#096DD9',
-                radius: 4,
-            };
 
             let startHeight = -height / 2;
-            const headGroup = group.addGroup({});
+            let startWidth = -width / 2;
 
-            headGroup.addShape('rect', {
-                attrs: {
-                    x: -width / 2,
-                    y: startHeight,
-                    width,
-                    height: 22,
-                    stroke: boxStyle.stroke,
-                    radius: [boxStyle.radius, boxStyle.radius, 0, 0],
-                },
-                name: 'head-group',
-            });
-            startHeight += 22;
-            headGroup.addShape('text', {
-                attrs: {
-                    x: 0, // 居中
-                    y: -height / 2 + 11,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    text: cfg.label,
-                    fill: '#212121',
-                },
-                name: 'head-label',
-            });
             const keyShape = group.addShape('rect', {
                 attrs: {
                     x: -width / 2,
                     y: -height / 2,
                     width,
                     height,
-                    fillOpacity: 0.2,
-                    ...boxStyle,
+                    ...NodeStyle.boxStyle,
                 },
                 name: 'node-box',
             });
+            const headGroup = group.addGroup({});
+
+            headGroup.addShape('rect', {
+                attrs: {
+                    x: startWidth,
+                    y: startHeight,
+                    width,
+                    ...NodeStyle.headStyle,
+                },
+                name: 'head-group',
+            });
+            headGroup.addShape('text', {
+                attrs: {
+                    x: 0, // 居中
+                    y: -height / 2 + NodeStyle?.headStyle?.height / 2,
+                    textAlign: 'center',
+                    textBaseline: 'middle',
+                    text: cfg.label,
+                    ...NodeStyle.headStyle.labelStyle,
+                },
+                name: 'head-label',
+            });
+            startHeight += NodeStyle.headStyle.height;
 
             const instLineList = instLines as LineInfo[];
-            const lineHeight = style.instLineHeight || 12;
-            const paddingV = style.paddingV || 8;
-            const breakpointRx = style.breakPointR || 3;
-            const paddingH = style.paddingH || 6;
-            const instFontSize = style.instFontSize || 10;
-            startHeight += paddingV;
+
             if (instLineList.length > 0) {
                 const instGroup = group.addGroup({ name: 'inst-group' });
+                const {
+                    breakPointStyle,
+                    labelPcStyle,
+                    labelOpStrStyle,
+                    paddingH,
+                    paddingV,
+                    lineHeight,
+                    fontSize,
+                } = NodeStyle.instGroupStyle;
+                startHeight += paddingV;
                 for (let i = 0; i < instLineList.length; i++) {
                     const lineGroup = instGroup.addGroup({
                         name: 'inst-line-group',
                     });
+                    startWidth = -width / 2 + paddingH;
                     const lineInfo = instLineList[i];
                     lineGroup.cfg.lineInfo = lineInfo;
                     lineGroup.cfg.lineIndex = i;
-
-                    let lineLeft = -width / 2 + paddingH;
 
                     const lineStartHeight =
                         startHeight + i * (lineHeight + paddingV);
 
                     lineGroup.addShape('circle', {
                         attrs: {
-                            x: lineLeft + breakpointRx,
-                            y:
-                                lineStartHeight +
-                                // lineHeight / 2 +
-                                // paddingV -
-                                breakpointRx,
-                            r: breakpointRx,
+                            x: startWidth + breakPointStyle.r,
+                            y: lineStartHeight + breakPointStyle.r,
+                            ...breakPointStyle,
                             fillOpacity: lineInfo.showBreakPoint ? 1 : 0,
-                            fill: 'red',
                         },
+
                         name: `break-point`,
                     });
 
-                    lineLeft += breakpointRx * 2 + paddingH;
+                    startWidth += breakPointStyle.r * 2 + paddingH;
                     lineGroup.addShape('text', {
                         attrs: {
-                            fontSize: instFontSize,
-                            fill: '#616161',
-                            x: lineLeft,
+                            x: startWidth,
                             y: lineStartHeight,
-                            textAlign: 'start',
-                            textBaseline: 'top',
                             text: lineInfo.pc,
+                            ...labelPcStyle as ShapeAttrs,
                         },
                     });
 
-                    lineLeft +=
-                        measureTextWidth(lineInfo.pc, instFontSize) + paddingH;
-
-                    const restWidth = width - lineLeft - paddingH;
+                    startWidth +=
+                        measureTextWidth(lineInfo.pc, { fontSize }) + paddingH;
+                    const restWidth = width - startWidth - paddingH;
                     lineGroup.addShape('text', {
                         attrs: {
-                            fontSize: instFontSize,
-                            x: lineLeft,
+                            x: startWidth,
                             y: lineStartHeight,
                             width: restWidth,
-                            textAlign: 'start',
-                            textBaseline: 'top',
-                            fill: '#919191',
-                            text: getEllipsisText(
-                                lineInfo.opStr,
-                                restWidth,
-                                instFontSize
-                            ),
+                            text: getEllipsisText(lineInfo.opStr, restWidth, {
+                                fontSize,
+                            }),
+                            ...labelOpStrStyle as ShapeAttrs,
                         },
                     });
                 }
@@ -128,7 +163,6 @@ G6.registerNode(
             return keyShape;
         },
         update(cfg: ModelConfig, node: Item, updateType: UpdateType) {
-            console.log(cfg, node, updateType);
             const lineIndex = cfg.lineIndex as number;
             const instLines = cfg.instLines as LineInfo[];
             const lineInfo = instLines[lineIndex];
@@ -140,17 +174,10 @@ G6.registerNode(
 
             const instLineGroup = instGroup.getChildren()[lineIndex] as IGroup;
             const breakPointShape = instLineGroup.get('children')[0];
-            console.log(
-                group,
-                instGroup,
-                lineIndex,
-                instLineGroup,
-                breakPointShape
-            );
+
             breakPointShape.attr({
                 fillOpacity: lineInfo.showBreakPoint ? 1 : 0,
             });
-            console.log(breakPointShape);
         },
         getAnchorPoints() {
             return [
@@ -174,4 +201,4 @@ G6.registerNode(
     'single-node'
 );
 
-
+export default type;

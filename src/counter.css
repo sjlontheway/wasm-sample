@@ -1,0 +1,8 @@
+.counter-line {
+    width: 100%;
+}
+
+.counter-line button{
+    padding: 10px;
+    margin: 10px;
+}

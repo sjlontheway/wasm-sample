@@ -1,7 +1,7 @@
-import { NodeConfig, EdgeConfig, ComboConfig, IPointTuple } from '@antv/g6';
+import { NodeConfig, EdgeConfig, ComboConfig } from '@antv/g6';
 import { graphviz } from '@hpcc-js/wasm';
-import { dotExampleString } from './data/dot';
-import { Box, InstLine } from './types';
+import { dotExampleString } from '../dgraph/data/dot';
+import { Box, InstLine } from '../dgraph/types';
 import { getCustomColor } from '../utils/x11Color';
 
 export async function parseDotStringToJson(
@@ -25,7 +25,6 @@ export class DotParser {
     async covertDotToJson() {
         const ret: string = await graphviz.layout(this.dotString, 'json');
         this.orignalObject = JSON.parse(ret);
-        console.log(this.orignalObject);
         return this;
     }
 
@@ -57,10 +56,8 @@ export class DotParser {
             number,
             number
         ];
-
         const startX = rect[0];
         const startY = this.graphHeight - rect[3];
-
         return {
             startX,
             startY,

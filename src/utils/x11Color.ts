@@ -527,3 +527,13 @@ export function x11ColorNameToHex(colorName: string): string | undefined {
     //@ts-ignore
     return X11Color[`${colorName}`];
 }
+
+function getRandomRGBHexNum() {
+    return Math.floor(Math.random() * 255).toString(16);
+}
+
+export function getRandomColor() {
+    const color = `#${getRandomRGBHexNum()}${getRandomRGBHexNum()}${getRandomRGBHexNum()}`;
+    console.log(color);
+    return color;
+}
