@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import CanvasRenderer from './lib/InfinitDragCanvas';
 import { IDataSource } from './types';
-import {getCustomColor, getRandomColor} from '../utils/x11Color'
+import { getCustomColor, getRandomColor } from '../utils/x11Color';
 interface CanvasListProps {
     width: number;
     height: number;
@@ -60,10 +60,23 @@ const CavasList: React.FC<CanvasListProps> = (props: CanvasListProps) => {
                         const { width, height } = ctx.canvas;
                         ctx.save();
                         ctx.fillStyle = getCustomColor(position);
-                        ctx.fillRect(0,0,width,height);
+                        ctx.fillRect(0, 0, width, height);
                         ctx.restore();
                         ctx.fillText(data + '', width / 2, height / 2);
 
+                        const size = 20;
+
+                        for (let i = 0; i < 1000; i++) {
+                            ctx.save();
+                            ctx.translate(
+                                Math.round(Math.random() * i * size),
+                                Math.round(Math.random() * i * size)
+                            );
+                            ctx.fillStyle = getRandomColor();
+                            ctx.fillRect(0, 0, size, size);
+                            ctx.restore();
+                            ctx.fillText(data + '', width / 2, height / 2);
+                        }
                     },
                 });
 
@@ -73,7 +86,11 @@ const CavasList: React.FC<CanvasListProps> = (props: CanvasListProps) => {
     });
 
     return (
-        <div style={{ width, height,overflow:'hidden' }} className="container" ref={ref}></div>
+        <div
+            style={{ width, height, overflow: 'hidden' }}
+            className="container"
+            ref={ref}
+        ></div>
     );
 };
 

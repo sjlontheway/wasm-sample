@@ -48,9 +48,9 @@ export interface IDragEventHelper {
 }
 
 export interface IOffScreenCache<T> {
-    setCache(postion: number, cacheCanvas: OffscreenCanvas): void;
+    setCacheStartItem(postion: number): void;
 
-    getCache(postion: number): IOffScreenItem<T>;
+    getCache(postion: number): IOffScreenItem<T> | undefined;
 }
 
 export interface IOffScreenItem<T> {
@@ -71,10 +71,10 @@ export interface IOffScreenItemOptions<T> {
 }
 
 export interface IOffScreenCacheOptions<T> {
-    itemIndex: number;
     width: number;
     height: number;
     cacheSize: number;
+    dataSource:IDataSource<T>;
     renderItem: (
         ctx: OffscreenCanvasRenderingContext2D,
         itemData: T,

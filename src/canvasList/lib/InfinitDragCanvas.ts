@@ -2,8 +2,10 @@ import {
     ICanvasListRender,
     ICanvasListRendererOptions,
     IDragCanvasListener,
+    IOffScreenCache,
 } from '../types';
-import { ScreenItem } from './drawCache';
+
+import OffScreenItemCache, { ScreenItem } from './drawCache';
 import EventerHandler from './EventHandler';
 
 class CanvasListRenderer<T>
@@ -21,20 +23,18 @@ class CanvasListRenderer<T>
 
     private updatingThresholdLen = 0;
 
-    private data: T[] = [];
-
     private cacheScreenMap = new Map();
 
     private currentShowItemIndex = 0;
 
-    
+    private drawCache: IOffScreenCache<T>;
     constructor(
         private container: HTMLDivElement,
         private options: ICanvasListRendererOptions<T>
     ) {
         this.canvas = document.createElement('canvas');
-        this.canvas.width = this.options.width * 3;
-        this.canvas.height = this.options.height * 3;
+        this.canvas.width = this.options.width;
+        this.canvas.height = this.options.height;
         this.container.appendChild(this.canvas);
         this.eventHandler = new EventerHandler(this.canvas);
         this.eventHandler.registerDragCanvasEvent(this);
@@ -42,45 +42,47 @@ class CanvasListRenderer<T>
             this.options.direction === 'horizonal'
                 ? this.options.width * this.updatingThreshold
                 : this.options.height * this.updatingThreshold;
+        const { width, height, renderItem, dataLoader } = this.options;
+        this.drawCache = new OffScreenItemCache({
+            width,
+            height,
+            renderItem,
+            cacheSize: 3,
+            dataSource: dataLoader,
+        });
+    }
+
+    private _getBaseScreenSize(): number {
+        return this.options.direction === 'horizonal'
+            ? this.options.width
+            : this.options.height;
     }
 
     private _generatorRenderScreens(
         showingScreenIndex: number,
         updateTranslate: boolean
     ) {
-        const baseSize =
-            this.options.direction === 'horizonal'
-                ? this.options.width
-                : this.options.height;
+        const baseSize = this._getBaseScreenSize();
+        let baseTranslate = 0;
         if (showingScreenIndex <= 0) {
-            this.renderScreenIndexList = [0, 1, 2];
+            this.renderScreenIndexList = [0, 1];
             if (updateTranslate) this.translateLen = 0;
         } else if (showingScreenIndex === this.options.itemSize) {
             this.renderScreenIndexList = [
-                showingScreenIndex - 2,
                 showingScreenIndex - 1,
                 showingScreenIndex,
             ];
-            if (updateTranslate) this.translateLen = -baseSize * 2;
+            baseTranslate = -baseSize;
         } else {
             this.renderScreenIndexList = [
                 showingScreenIndex - 1,
                 showingScreenIndex,
                 showingScreenIndex + 1,
             ];
-            if (updateTranslate) this.translateLen = -baseSize;
+            baseTranslate = -baseSize;
         }
 
-        console.log('_generatorRenderScreens:', this.renderScreenIndexList);
-    }
-
-    private _renderScreen() {
-        const ctx = this.canvas.getContext('2d');
-        const width = this.options.width;
-        for (let i = 0; i < this.renderScreenIndexList.length; i++) {
-            const offScreenItem = this.cacheScreenMap.get(i);
-            ctx?.drawImage(offScreenItem.getScreenCanvas(), i * width, 0);
-        }
+        if (updateTranslate) this.translateLen = baseTranslate;
     }
 
     public render(showingItemIndex: number = 0) {
@@ -88,30 +90,20 @@ class CanvasListRenderer<T>
     }
 
     private _render(
-        showingItemIndex: number = 0,
+        showingItemIndex: number,
         updateTranslate: boolean = false
     ): void {
-        this.currentShowItemIndex = showingItemIndex;
-        this._generatorRenderScreens(showingItemIndex, updateTranslate);
-        const { width, height, renderItem } = this.options;
+        if (this.currentShowItemIndex !== showingItemIndex) {
+            this.currentShowItemIndex = showingItemIndex;
+            this._generatorRenderScreens(showingItemIndex, updateTranslate);
+            this.drawCache.setCacheStartItem(this.renderScreenIndexList[0]);
+        }
 
-        for (let i = 0; i < this.renderScreenIndexList.length; i++) {
-            const renderScreenIndex = this.renderScreenIndexList[i];
-            const data: T =
-                this.options.dataLoader.getDataByPosition(renderScreenIndex);
-            const screenItem = new ScreenItem({
-                width,
-                height,
-                renderItem,
-                itemRenderData: data,
-                itemIndex: renderScreenIndex,
-            });
-            this.cacheScreenMap.set(i, screenItem);
-        }
-        if (updateTranslate) {
-            this._translateDomContainer(this.translateLen);
-        }
-        this._renderScreen();
+        this._drawOffScreenItem();
+    }
+
+    private _isVerticalLayout() {
+        return this.options.direction === 'vertical';
     }
 
     private _isReachMinBound() {
@@ -128,7 +120,6 @@ class CanvasListRenderer<T>
     }
 
     onDrag(deltaX: number, deltaY: number): void {
-   
         const { width, height, direction } = this.options;
         let baseSize = width;
         let deltaSize = deltaX;
@@ -137,80 +128,64 @@ class CanvasListRenderer<T>
             deltaSize = deltaY;
         }
 
-        let tranlateLen = this.translateLen + deltaSize;
+        this.translateLen = this.translateLen + deltaSize;
+        let resetPostion = this.currentShowItemIndex;
 
-        //当前是左边界,滑动到第一屏，禁止左滑
-        if (this._isReachMinBound() && deltaX > 0) {
-            console.log('onDrag:left bound:', tranlateLen);
-            tranlateLen = Math.min(0, tranlateLen);
-        } else if (this._isReachMaxBound() && deltaX < 0) {
-            //当前是右边界,滑动到最后一屏，禁止右滑
-            console.log('onDrag:right bound');
-            tranlateLen = Math.max(-baseSize * 2, tranlateLen);
+        // 到达小索引边界，且继续像小边界滑动
+        if (this._isReachMinBound() && deltaSize > 0) {
+            console.log('left bound:');
+            this.translateLen = Math.min(0, this.translateLen);
+        } else if (this._isReachMaxBound() && deltaSize < 0) {
+            console.log('right bound:');
+
+            // 到达大索引方向边界，且继续滑动时
+            this.translateLen = Math.max(-baseSize, this.translateLen);
         } else {
-            // 往小索引方向移动
-            if (deltaSize > 0 && tranlateLen >= -this.updatingThresholdLen) {
-                console.log('onDrag update left item');
-                this._renderMinDirNextItem();
-                return;
-            }
-            console.log('onDrag:deltaX:', deltaX, tranlateLen);
-
-            //往大索引方向拖拽
+            // 往小索引滚动且触发更新前一屏幕内容
             if (
-                deltaSize < 0 &&
-                tranlateLen < -baseSize - this.updatingThresholdLen
+                deltaSize > 0 &&
+                this.translateLen >= -this.updatingThresholdLen
             ) {
-                console.log('onDrag update right item');
-                this._renderMaxDirNextItem();
-                return;
+                this.translateLen -= baseSize;
+                resetPostion--;
+            } else if (
+                // 往大索引滚动且触发更新前一屏幕内容
+                deltaSize < 0 &&
+                this.translateLen <= -baseSize - this.updatingThresholdLen
+            ) {
+                console.log(' 往大索引滚动且触发更新后一屏幕内容');
+                this.translateLen += baseSize;
+                resetPostion++;
             }
         }
-        if (this.translateLen !== tranlateLen) {
-            this._translateDomContainer(tranlateLen);
-        }
-    }
-    private _renderMaxDirNextItem() {
-        this._render(this.currentShowItemIndex + 1, false);
-        const { width, height, direction } = this.options;
-        let resetX = width,
-            resetY = 0;
-        let baseSize = width;
-        if (direction === 'vertical') {
-            (resetX = 0), (resetY = height);
-        }
-        // 重置画布的滚动坐标系
-        this.translateLen = baseSize + this.translateLen;
-        this.eventHandler.resetPosition(resetX, resetY);
-        this._translateDomContainer(this.translateLen);
+
+        this._render(resetPostion);
     }
 
-    private _renderMinDirNextItem() {
-        this._render(this.currentShowItemIndex - 1, false);
-        const { width, height, direction } = this.options;
-        let baseSize = width;
-        if (direction === 'vertical') {
-            baseSize = height;
-        }
-        // resetPosition
-        this.translateLen = -baseSize + this.translateLen;
-        this.eventHandler.resetPosition(-baseSize, 0);
-        this._translateDomContainer(this.translateLen);
-    }
-
-    private _translateDomContainer(tranlateL: number) {
-       
-        
-        if (this.options.direction === 'horizonal') {
-            this.canvas.style.transform = `translateX(${tranlateL}px)`;
-        } else {
-            this.canvas.style.transform = `translateY(${tranlateL}px)`;
+    private _drawOffScreenItem() {
+        const ctx = this.canvas.getContext('2d');
+        ctx?.clearRect(0, 0, this.options.width, this.options.height);
+        ctx?.save();
+        let tranlateX = this.translateLen;
+        let tranlateY = 0;
+        if (this._isVerticalLayout()) {
+            tranlateX = 0;
+            tranlateY = this.translateLen;
         }
 
-        this.translateLen = tranlateL;
+        ctx?.translate(tranlateX, tranlateY);
+        console.log(tranlateX);
+        const width = this.options.width;
+        let i = 0;
+        for (let position of this.renderScreenIndexList) {
+            const offScreenItem = this.drawCache.getCache(position);
+            console.log(offScreenItem,position)
+            if (offScreenItem)
+                ctx?.drawImage(offScreenItem.getScreenCanvas(), i * width, 0);
+            i++;
+        }
+        ctx?.restore();
     }
-
-    _needUpdateCanvas() {}
 }
 
 export default CanvasListRenderer;

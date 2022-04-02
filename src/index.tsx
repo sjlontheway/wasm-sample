@@ -23,7 +23,7 @@ render(
     <Provider store={store}>
         {/* <Counter /> */}
         {/* <FlowGraph /> */}
-        <VirtualMemory width={100} height={1000} />
+        {/* <VirtualMemory width={100} height={1000} /> */}
         <CavasList width={1000} height={300}/>
     </Provider>,
     document.getElementById('root')

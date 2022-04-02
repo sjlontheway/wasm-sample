@@ -1,4 +1,5 @@
 import {
+    IDataSource,
     IOffScreenCache,
     IOffScreenCacheOptions,
     IOffScreenItem,
@@ -44,16 +45,77 @@ export class ScreenItem<T> implements IOffScreenItem<T> {
 }
 
 class OffScreenItemCache<T> implements IOffScreenCache<T> {
-    private cache = new Map();
+    private cacheItemIndexList: number[];
+    private startItemPosition: number = -1;
+    private cacheMap = new Map<number, ScreenItem<T>>();
 
-    constructor(private options: IOffScreenCacheOptions<T>) {}
-
-    setCache(postion: number, cacheCanvas: OffscreenCanvas): void {
-        this.cache.set(postion, cacheCanvas);
+    constructor(private options: IOffScreenCacheOptions<T>) {
+        const { dataSource, cacheSize } = this.options;
+        this.cacheItemIndexList = new Array(cacheSize);
     }
 
-    getCache(position: number): ScreenItem<T>  {
-        return this.cache.get(position);
+    setCacheStartItem(startPostion: number): void {
+        console.log('setCacheStartItem:',startPostion, this.startItemPosition)
+
+        if (startPostion >= 0 && startPostion === this.startItemPosition) {
+            return;
+        }
+        const { dataSource, cacheSize, width, height, renderItem } =
+            this.options;
+
+        let newStartItemPosition = startPostion;
+        let newEndItemPostion = startPostion + cacheSize;
+
+        let disuseStartItemIndex = this.startItemPosition;
+        let disuseEndIndex = this.startItemPosition + cacheSize;
+
+        if (
+            this.startItemPosition > startPostion &&
+            this.startItemPosition < startPostion + cacheSize
+        ) {
+            disuseStartItemIndex = newEndItemPostion;
+            newEndItemPostion = this.startItemPosition;
+        }
+
+        if (
+            startPostion > this.startItemPosition &&
+            startPostion < this.startItemPosition + cacheSize
+        ) {
+            newStartItemPosition = disuseEndIndex;
+            disuseEndIndex = startPostion;
+        }
+
+        let redrawIndex = newStartItemPosition;
+        for (let i = disuseStartItemIndex; i < disuseEndIndex; i++) {
+            const reuseScreen = this.cacheMap.get(i);
+            this.cacheMap.delete(i);
+
+            if (reuseScreen && redrawIndex < newEndItemPostion) {
+                const data = dataSource.getDataByPosition(redrawIndex);
+                reuseScreen.reRender(data, redrawIndex);
+                this.cacheMap.set(redrawIndex, reuseScreen);
+                redrawIndex++;
+            }
+        }
+        if (redrawIndex < newEndItemPostion) {
+            for (let i = redrawIndex; i < newEndItemPostion; i++) {
+                const data = dataSource.getDataByPosition(i);
+                const screen = new ScreenItem({
+                    width,
+                    height,
+                    itemIndex: i,
+                    itemRenderData: data,
+                    renderItem,
+                });
+                this.cacheMap.set(i, screen);
+            }
+        }
+        this.startItemPosition = startPostion;
+    }
+
+    getCache(position: number): ScreenItem<T> | undefined {
+
+        return this.cacheMap.get(position);
     }
 }
 

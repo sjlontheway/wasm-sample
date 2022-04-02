@@ -64,7 +64,6 @@ class EventerHandler implements IDragEventHelper {
         if (this.isMouseDown && this.dragListener && this.prePosistion) {
             const deltaX = e.x - this.prePosistion.x;
             const deltaY = e.y - this.prePosistion.y;
-            console.log(e.x,e.y)
             if (!this.isDraged) {
                 this.isDraged = true;
                 if (this.dragListener && this.dragListener.onDragStart) {

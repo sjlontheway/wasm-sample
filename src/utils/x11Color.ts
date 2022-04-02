@@ -534,6 +534,5 @@ function getRandomRGBHexNum() {
 
 export function getRandomColor() {
     const color = `#${getRandomRGBHexNum()}${getRandomRGBHexNum()}${getRandomRGBHexNum()}`;
-    console.log(color);
     return color;
 }
